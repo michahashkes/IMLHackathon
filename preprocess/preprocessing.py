@@ -248,6 +248,15 @@ class Preprocessor:
     def actualActivity(self):
         self.df = self.df.drop(columns="actualActivity")
 
+    def diagnosisDate(self):
+        self.df = self.df.drop(columns="diagnosisDate")
+
+    def lastSurgeryDate(self):
+        self.df = self.df.drop(columns="lastSurgeryDate")
+
+    def id(self):
+        self.df = self.df.drop(columns="id")
+
     def pr(self):
 
         self.df["pr_perc"] = self.df["pr"].fillna(-1).astype(str).apply(self.get_percentage)
@@ -361,6 +370,9 @@ class Preprocessor:
         self.her2()
         self.side()
         self.er()
+        self.diagnosisDate()
+        self.lastSurgeryDate()
+        self.id()
 
     def get_encoders(self):
         return self.mlb,  self.form_names_enc, self.histological_diagnosis_enc, self.margin_type_enc, self.surgery_name_enc
