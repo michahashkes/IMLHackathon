@@ -7,8 +7,8 @@ from sklearn.preprocessing import MultiLabelBinarizer, OneHotEncoder
 import re
 from datetime import datetime
 
-new_columns = {'Form Name': 'formName_{suffix}',
-               'Hospital': 'hospital',
+new_columns = {' Form Name': 'formName',
+               ' Hospital': 'hospital',
                'User Name': 'userName',
                'אבחנה-Age': 'age',
                'אבחנה-Basic stage': 'basicStage',
@@ -44,19 +44,66 @@ new_columns = {'Form Name': 'formName_{suffix}',
 
 
 class Preprocessor:
-    def __init__(self, data_file_name: str, labels0_file_name: str, labels1_file_name: str,
-                 mlb: MultiLabelBinarizer = None,
+    def __init__(self, data_file_name: str, labels0_file_name: str, labels1_file_name: str, train=True,
+                 mlb: MultiLabelBinarizer = None, form_names_enc: OneHotEncoder = None,
                  histological_diagnosis_enc: OneHotEncoder = None, margin_type_enc: OneHotEncoder = None,
                  surgery_name_enc: MultiLabelBinarizer = None):
         self.df = pd.read_csv(data_file_name)
-        self.labels0 = pd.read_csv(labels0_file_name)
-        self.labels1 = pd.read_csv(labels1_file_name)
 
         self.df.rename(columns=new_columns, inplace=True)
-        self.labels0.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
 
-        self.mlb, self.histological_diagnosis_enc, self.margin_type_enc, self.surgery_name_enc =\
-            mlb, histological_diagnosis_enc, margin_type_enc, surgery_name_enc
+        self.mlb, self.form_names_enc, self.histological_diagnosis_enc, self.margin_type_enc, self.surgery_name_enc, = \
+            mlb, form_names_enc, histological_diagnosis_enc, margin_type_enc, surgery_name_enc
+        self.train = train
+
+        if self.train:
+            self.labels0 = pd.read_csv(labels0_file_name)
+            self.labels0.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
+            self.labels1 = pd.read_csv(labels1_file_name)
+            X_y = self.df.join(self.labels0)
+            X_y = X_y.join(self.labels1)
+            forms_df = X_y[['id', 'formName']]
+            self.form_names_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(forms_df[['formName']])
+            encoded_columns = pd.DataFrame(self.form_names_enc.transform(forms_df[['formName']]),
+                                           columns=self.form_names_enc.categories_)
+            forms_df = forms_df.join(encoded_columns).drop(columns='formName')
+            forms_df = forms_df.groupby('id').max().reset_index()
+            X_y = X_y.merge(forms_df, on='id')
+            X_y = X_y.drop(columns=['userName', 'formName']).drop_duplicates().reset_index(drop=True)
+            self.df = X_y.drop(columns=['locationDistalMetastases', 'אבחנה-Tumor size'])
+            self.labels0 = X_y[['locationDistalMetastases']]
+            self.labels1 = X_y['אבחנה-Tumor size']
+
+        else:
+            forms_df = self.df[['id', 'formName']]
+            encoded_columns = pd.DataFrame(self.form_names_enc.transform(forms_df[['formName']]),
+                                           columns=self.form_names_enc.categories_)
+            self.df = self.df.join(encoded_columns).drop(columns=['userName', 'formName'])
+        # self.labels0.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
+
+    def fix_data(self, train=True):
+        X_y = self.df.join(self.labels0)
+        X_y = X_y.join(self.labels1)
+
+        forms_df = X_y[['id', 'formName']]
+        if self.form_names_enc is None:
+            self.form_names_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(forms_df[['formName']])
+        encoded_columns = pd.DataFrame(self.form_names_enc.transform(forms_df[['formName']]),
+                                       columns=self.form_names_enc.categories_)
+        # forms_df = forms_df.join(encoded_columns)
+        # forms_df = pd.get_dummies(forms_df, columns=['formName'])
+
+        if train:
+            forms_df = forms_df.groupby('id').max().reset_index()
+            X_y = X_y.merge(forms_df, on='id')
+            X_y = X_y.drop(columns=['userName', 'formName']).drop_duplicates().reset_index(drop=True)
+        else:
+            X_y = X_y.join(encoded_columns)
+
+        X = X_y.drop(columns=['אבחנה-Location of distal metastases', 'אבחנה-Tumor size'])
+        y0 = X_y['אבחנה-Location of distal metastases']
+        y1 = X_y['אבחנה-Tumor size']
+        return X, y0, y1
 
     def binarize_labels(self):
         self.labels0['locationDistalMetastases'] = self.labels0['locationDistalMetastases'].apply(ast.literal_eval)
@@ -87,7 +134,7 @@ class Preprocessor:
         if self.histological_diagnosis_enc is None:
             self.histological_diagnosis_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(self.df[['histologicalDiagnosis']])
         encoded_columns = pd.DataFrame(self.histological_diagnosis_enc.transform(self.df[['histologicalDiagnosis']]),
-                                       columns=self.histological_diagnosis_enc.get_feature_names_out(['histologicalDiagnosis']))
+                                       columns=self.histological_diagnosis_enc.categories_)
         self.df = self.df.join(encoded_columns)
         self.df = self.df.drop(columns="histologicalDiagnosis")
 
@@ -176,7 +223,7 @@ class Preprocessor:
         if self.margin_type_enc is None:
             self.margin_type_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(self.df[['marginType']])
         encoded_columns = pd.DataFrame(self.margin_type_enc.transform(self.df[['marginType']]),
-                                       columns=self.margin_type_enc.get_feature_names_out(['marginType']))
+                                       columns=self.margin_type_enc.categories_)
         self.df = self.df.join(encoded_columns)
         self.df = self.df.drop(columns="marginType")
 
@@ -200,6 +247,15 @@ class Preprocessor:
 
     def actualActivity(self):
         self.df = self.df.drop(columns="actualActivity")
+
+    def diagnosisDate(self):
+        self.df = self.df.drop(columns="diagnosisDate")
+
+    def lastSurgeryDate(self):
+        self.df = self.df.drop(columns="lastSurgeryDate")
+
+    def id(self):
+        self.df = self.df.drop(columns="id")
 
     def pr(self):
 
@@ -287,7 +343,8 @@ class Preprocessor:
         return np.mean(ls)
 
     def preprocess(self):
-        self.binarize_labels()
+        if self.train:
+            self.binarize_labels()
         self.age()
         self.basicStage()
         self.histologicalDiagnosis()
@@ -313,9 +370,12 @@ class Preprocessor:
         self.her2()
         self.side()
         self.er()
+        self.diagnosisDate()
+        self.lastSurgeryDate()
+        self.id()
 
     def get_encoders(self):
-        return self.mlb,  self.histological_diagnosis_enc, self.margin_type_enc, self.surgery_name_enc
+        return self.mlb,  self.form_names_enc, self.histological_diagnosis_enc, self.margin_type_enc, self.surgery_name_enc
 
     def get_features(self):
         return self.df.columns
@@ -331,17 +391,29 @@ class Preprocessor:
 
 
 if __name__ == '__main__':
-    train_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv', '../data/train_labels1.csv')
+    train_preprocessor = Preprocessor('../data/train.feats.csv', '../data/train.labels.0.csv', '../data/train.labels.1.csv')
     train_preprocessor.preprocess()
     train_df = train_preprocessor.get_df()
     train_labels = train_preprocessor.get_labels0()
     train_labels1 = train_preprocessor.get_labels1()
 
     encoders = train_preprocessor.get_encoders()
-    test_preprocessor = Preprocessor('../data/dev_data.csv', '../data/dev_labels.csv', '../data/dev_labels1.csv',
-                                     encoders[0], encoders[1], encoders[2], encoders[3])
+    test_preprocessor = Preprocessor('../data/test.feats.csv', '', '', False,
+                                     encoders[0], encoders[1], encoders[2], encoders[3], encoders[4])
     test_preprocessor.preprocess()
     test_df = test_preprocessor.get_df()
-    test_labels = test_preprocessor.get_labels0()
-    test_labels1 = test_preprocessor.get_labels1()
+
+    # train_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv', '../data/train_labels1.csv')
+    # train_preprocessor.preprocess()
+    # train_df = train_preprocessor.get_df()
+    # train_labels = train_preprocessor.get_labels0()
+    # train_labels1 = train_preprocessor.get_labels1()
+    #
+    # encoders = train_preprocessor.get_encoders()
+    # test_preprocessor = Preprocessor('../data/dev_data.csv', '../data/dev_labels.csv', '../data/dev_labels1.csv', False,
+    #                                  encoders[0], encoders[1], encoders[2], encoders[3], encoders[4])
+    # test_preprocessor.preprocess()
+    # test_df = test_preprocessor.get_df()
+    # test_labels = test_preprocessor.get_labels0()
+    # test_labels1 = test_preprocessor.get_labels1()
 
