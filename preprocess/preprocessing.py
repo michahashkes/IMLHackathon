@@ -44,22 +44,24 @@ new_columns = {'Form Name': 'formName_{suffix}',
 
 
 class Preprocessor:
-    def __init__(self, data_file_name: str, lables_file_name: str, mlb: MultiLabelBinarizer = None,
+    def __init__(self, data_file_name: str, labels0_file_name: str, labels1_file_name: str,
+                 mlb: MultiLabelBinarizer = None,
                  histological_diagnosis_enc: OneHotEncoder = None, margin_type_enc: OneHotEncoder = None):
         self.df = pd.read_csv(data_file_name)
-        self.labels = pd.read_csv(lables_file_name)
+        self.labels0 = pd.read_csv(labels0_file_name)
+        self.labels1 = pd.read_csv(labels1_file_name)
 
         self.df.rename(columns=new_columns, inplace=True)
-        self.labels.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
+        self.labels0.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
 
         self.mlb, self.histological_diagnosis_enc, self.margin_type_enc = mlb, histological_diagnosis_enc, margin_type_enc
 
     def binarize_labels(self):
-        self.labels['locationDistalMetastases'] = self.labels['locationDistalMetastases'].apply(ast.literal_eval)
+        self.labels0['locationDistalMetastases'] = self.labels0['locationDistalMetastases'].apply(ast.literal_eval)
         if self.mlb is None:
             self.mlb = MultiLabelBinarizer()
-            self.mlb.fit(self.labels['locationDistalMetastases'])
-        self.lables_binary = self.mlb.transform(self.labels['locationDistalMetastases'])
+            self.mlb.fit(self.labels0['locationDistalMetastases'])
+        self.lables_binary = self.mlb.transform(self.labels0['locationDistalMetastases'])
         self.lables_binary = pd.DataFrame(self.lables_binary, columns=self.mlb.classes_)
         self.lables_binary["sum"] = self.lables_binary.sum(axis=1)
 
@@ -256,7 +258,8 @@ class Preprocessor:
         self.df['her2'] = self.df['her2'].apply(get_her2)
 
     def side(self):
-        self.df['side'] = self.df['side'].replace({'שמאל': 0, 'ימין': 1})
+        self.df = pd.get_dummies(self.df, columns=['side'])
+        # self.df['side'] = self.df['side'].replace({'שמאל': 0, 'ימין': 1})
 
     def get_sign(self, input):
         x = re.search("[pPnN+-]", input)
@@ -286,6 +289,8 @@ class Preprocessor:
         self.tumorMarkTNM()
         self.tumorWidth()
         self.tumorDepth()
+        self.activityDate()
+        self.actualActivity()
         self.pr()
         self.histopatologicalDegree()
         self.nodesExam()
@@ -304,15 +309,18 @@ class Preprocessor:
     def get_df(self):
         return self.df
 
-    def get_labels(self):
+    def get_labels0(self):
         return self.lables_binary
+
+    def get_labels1(self):
+        return self.labels1
 
 
 if __name__ == '__main__':
     train_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv')
     train_preprocessor.preprocess()
     df = train_preprocessor.get_df()
-    labels = train_preprocessor.get_labels()
+    labels = train_preprocessor.get_labels0()
 
     encoders = train_preprocessor.get_encoders()
     test_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv',
