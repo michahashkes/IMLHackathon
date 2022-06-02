@@ -1,0 +1,10 @@
+Files:
+
+USERS - our cs usernames
+README
+project.pdf - a discription of our workflow
+task2/predictions.csv
+task2/requirements.txt
+task2/classifier.py
+task2/preprocessor.py - the preprossesing class
+
