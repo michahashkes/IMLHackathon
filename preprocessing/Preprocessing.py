@@ -5,6 +5,7 @@ import plotly.express as px
 import ast
 from sklearn.preprocessing import MultiLabelBinarizer
 import re
+from datetime import datetime
 
 class preprocessor():
     def __init__(self, data_file_name: str, lables_file_name: str):
@@ -115,10 +116,75 @@ class preprocessor():
         self.df = pd.get_dummies(self.df, columns=["marginType"])
         self.df = self.df.drop("marginType_none", 1)
 
-    def
+    def tumorMarkTNM(self):
+
         Stages_dict = {"T0": 0, "Tis": 1, "T1mic": 2, "T1a": 2, "T1b": 3, "T1": 3, "T1c": 3, "T2a": 4, "T2": 4,
                        "T2b": 4, "T3b": 5, "T3": 5, "T3c": 6, "T3d": 6, "T4a": 7, "T4": 8, "T4c": 9, "T4d": 9}
-        df["tumorMarkTNM"] = df["אבחנה-T -Tumor mark (TNM)"].apply(
+        self.df["tumorMarkTNM"] = self.df["tumorMarkTNM"].apply(
             lambda x: Stages_dict[x] if x in Stages_dict else None)
 
+        self.df["tumorMarkTNM"].fillna(np.mean(self.df["tumorMarkTNM"]), inplace=True)
 
+    def tumorDepth(self):
+        self.df = self.df.drop("tumorDepth", 1)
+
+    def tumorWidth(self):
+        self.df = self.df.drop("tumorWidth", 1)
+
+    def get_sign(input):
+        x = re.search("[pPnN+-]", input)
+        if not x:
+            return np.nan
+        return input[x.start()]
+
+    def pr(self):
+
+        self.df["pr_perc"] = self.df["pr"].fillna(-1).astype(str).apply(self.get_percentage)
+        self.df["pr_perc"] = np.where(self.df["pr_perc"] < 10, 1, self.df["pr_perc"])
+        self.df["pr_perc"] = np.where(self.df["pr_perc"] >= 10, 2, self.df["pr_perc"])
+
+        self.df["pr_pos"] = self.df["pr"].fillna(99).astype(str).apply(self.get_sign)
+        Stages_dict = {"-": 0, "n": 0, "N": 0, "+": 2, "p": 2, "P": 2}
+        self.df["pr_pos"] = self.df["pr_pos"].apply(lambda x: Stages_dict[x] if x in Stages_dict else None)
+        self.df["pr"] = np.where(self.df["pr_perc"].isnull(), self.df["pr_pos"], self.df["pr_perc"])
+        self.df["pr"].fillna(1, inplace=True)
+        self.df.drop(["pr_pos", "pr_perc"], inplace=True, axis=1)
+
+    def HistopatologicalDegree(self):
+        Stages_dict = {"Null": 2, "GX - Grade cannot be assessed": 2, "G1 - Well Differentiated": 4, "G2 - Modereately well differentiated": 3,
+                       "G3 - Poorly differentiated": 1, "G4 - Undifferentiated":0}
+        self.df["HistopatologicalDegree"] = self.df["HistopatologicalDegree"].apply(lambda x: Stages_dict[x] if x in Stages_dict else 2)
+
+    def NodeExam(self):
+        self.df.NodeExam.fillna(0, inplace=True)
+
+    def PositiveLymph(self):
+        self.df["PositiveLymph"].fillna(np.mean(self.df["PositiveLymph"]), inplace=True)
+
+    def SurgeryDate(self):
+        self.df["SurgeryDate1"] = pd.to_datetime(self.df["SurgeryDate1"], errors='coerce')
+        self.df["SurgeryDate2"] = pd.to_datetime(self.df["SurgeryDate2"], errors='coerce')
+        self.df["SurgeryDate3"] = pd.to_datetime(self.df["SurgeryDate3"], errors='coerce')
+
+        # Create a column that indicates whether the patient has surgery
+        self.df["hadSurgery"] = np.where(
+            self.df["SurgeryDate1"].isnull() & self.df["SurgeryDate2"].isnull() & self.df["SurgeryDate3"].isnull(), 0, 1)
+        self.df["lastSurgeryDate"] = self.df[["SurgeryDate1", "SurgeryDate2", "SurgeryDate2"]].max(axis=1)
+        self.df.lastSurgeryDate.fillna(0, inplace=True)
+
+        self.df.drop(["SurgeryDate1", "SurgeryDate2", "SurgeryDate3"], inplace=True, axis=1)
+
+    def er(self):
+        self.df["er_perc"] = self.df["er"].fillna(-1).astype(str).apply(self.get_percentage)
+        self.df["er_perc"] = np.where(self.df["er_perc"] < 10, 1, self.df["er_perc"])
+        self.df["er_perc"] = np.where(self.df["er_perc"] >= 10, 2, self.df["er_perc"])
+
+        self.df["er_pos"] = self.df["er"].fillna(99).astype(str).apply(self.get_sign)
+
+        Stages_dict = {"-": 0, "n": 0, "N": 0, "+": 2, "p": 2, "P": 2}
+        self.df["er_pos"] = self.df["er_pos"].apply(lambda x: Stages_dict[x] if x in Stages_dict else None)
+
+        self.df["er"] = np.where(self.df["er_perc"].isnull(), self.df["er_pos"], self.df["er_perc"])
+        self.df["er"].fillna(1, inplace=True)
+
+        self.df.drop(["er_perc", "er_pos"], inplace=True, axis=1)
