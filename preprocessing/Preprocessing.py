@@ -3,22 +3,28 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import ast
-from sklearn.preprocessing import MultiLabelBinarizer
+from sklearn.preprocessing import MultiLabelBinarizer, OneHotEncoder
 import re
 from datetime import datetime
 
 from utils import *
 
-class preprocessor():
-    def __init__(self):#, data_file_name: str, lables_file_name: str):
-        self.df = pd.read_csv(r"https://github.com/michahashkes/IMLHackathon/blob/main/data/train_data.csv?raw=true")
-        self.labels = pd.read_csv(r"https://github.com/michahashkes/IMLHackathon/blob/main/data/train_labels.csv?raw=true")
+class Preprocessor:
+    def __init__(self, data_file_name: str, lables_file_name: str, mlb: MultiLabelBinarizer = None,
+                 histological_diagnosis_enc: OneHotEncoder = None, margin_type_enc: OneHotEncoder = None):
+        self.df = pd.read_csv(data_file_name)
+        self.labels = pd.read_csv(lables_file_name)
 
         self.df.rename(columns=new_columns, inplace=True)
         self.labels.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
 
+        self.mlb, self.histological_diagnosis_enc, self.margin_type_enc = mlb, histological_diagnosis_enc, margin_type_enc
+
+    def binarize_labels(self):
         self.labels['locationDistalMetastases'] = self.labels['locationDistalMetastases'].apply(ast.literal_eval)
-        self.mlb = MultiLabelBinarizer().fit(self.labels['locationDistalMetastases'])
+        if self.mlb is None:
+            self.mlb = MultiLabelBinarizer()
+            self.mlb.fit(self.labels['locationDistalMetastases'])
         self.lables_binary = self.mlb.transform(self.labels['locationDistalMetastases'])
         self.lables_binary = pd.DataFrame(self.lables_binary, columns=self.mlb.classes_)
         self.lables_binary["sum"] = self.lables_binary.sum(axis=1)
@@ -40,11 +46,12 @@ class preprocessor():
         """
         make dummies
         """
-        self.histological_diagnosis_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(self.df[['histologicalDiagnosis']])
+        if self.histological_diagnosis_enc is None:
+            self.histological_diagnosis_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(self.df[['histologicalDiagnosis']])
         encoded_columns = pd.DataFrame(self.histological_diagnosis_enc.transform(self.df[['histologicalDiagnosis']]),
                                        columns=self.histological_diagnosis_enc.get_feature_names_out(['histologicalDiagnosis']))
         self.df = self.df.join(encoded_columns)
-        self.df = self.df.drop(columns="marginType")
+        self.df = self.df.drop(columns="histologicalDiagnosis")
 
     def lymphovascularInvasion(self):
         """
@@ -90,12 +97,7 @@ class preprocessor():
         self.df = self.df.join(temp)
         self.df[temp.columns] = self.df[temp.columns].fillna(0)
 
-        self.df = self.df.drop(["surgeryName1", "surgeryName2", "surgeryName3"], 1)
-
-    def get_percentage(input):
-        ls = re.findall("[0-9]+%", input)
-        ls = [int(sub.replace('%', '')) for sub in ls]
-        return np.mean(ls)
+        self.df = self.df.drop(columns=["surgeryName1", "surgeryName2", "surgeryName3"])
 
     def KI67_protein(self):
         """
@@ -106,11 +108,11 @@ class preprocessor():
 
         self.df["KI67_protein"] = self.df["KI67_protein"].fillna(np.mean(self.df["KI67_protein"]))
 
-    def lymphaticPen(self):
+    def lymphaticPenetration(self):
         """
         unnecessary data, dropping
         """
-        self.df = self.df.drop("lymphaticPen", 1)
+        self.df = self.df.drop(columns="lymphaticPenetration")
 
     def mMetastasesMarkTNM(self):
         """
@@ -121,7 +123,8 @@ class preprocessor():
             lambda x: TNM_M_stages_dict[x] if x in TNM_M_stages_dict else 1)
 
     def marginType(self):
-        self.margin_type_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(self.df[['marginType']])
+        if self.margin_type_enc is None:
+            self.margin_type_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(self.df[['marginType']])
         encoded_columns = pd.DataFrame(self.margin_type_enc.transform(self.df[['marginType']]),
                                        columns=self.margin_type_enc.get_feature_names_out(['marginType']))
         self.df = self.df.join(encoded_columns)
@@ -137,16 +140,10 @@ class preprocessor():
         self.df["tumorMarkTNM"].fillna(np.mean(self.df["tumorMarkTNM"]), inplace=True)
 
     def tumorDepth(self):
-        self.df = self.df.drop("tumorDepth", 1)
+        self.df = self.df.drop(columns="tumorDepth")
 
     def tumorWidth(self):
-        self.df = self.df.drop("tumorWidth", 1)
-
-    def get_sign(input):
-        x = re.search("[pPnN+-]", input)
-        if not x:
-            return np.nan
-        return input[x.start()]
+        self.df = self.df.drop(columns="tumorWidth")
 
     def pr(self):
 
@@ -159,31 +156,31 @@ class preprocessor():
         self.df["pr_pos"] = self.df["pr_pos"].apply(lambda x: Stages_dict[x] if x in Stages_dict else None)
         self.df["pr"] = np.where(self.df["pr_perc"].isnull(), self.df["pr_pos"], self.df["pr_perc"])
         self.df["pr"].fillna(1, inplace=True)
-        self.df.drop(["pr_pos", "pr_perc"], inplace=True, axis=1)
+        self.df.drop(columns=["pr_pos", "pr_perc"], inplace=True)
 
-    def HistopatologicalDegree(self):
+    def histopatologicalDegree(self):
         Stages_dict = {"Null": 2, "GX - Grade cannot be assessed": 2, "G1 - Well Differentiated": 4, "G2 - Modereately well differentiated": 3,
                        "G3 - Poorly differentiated": 1, "G4 - Undifferentiated":0}
-        self.df["HistopatologicalDegree"] = self.df["HistopatologicalDegree"].apply(lambda x: Stages_dict[x] if x in Stages_dict else 2)
+        self.df["histopatologicalDegree"] = self.df["histopatologicalDegree"].apply(lambda x: Stages_dict[x] if x in Stages_dict else 2)
 
-    def NodeExam(self):
-        self.df.NodeExam.fillna(0, inplace=True)
+    def nodesExam(self):
+        self.df['nodesExam'].fillna(0, inplace=True)
 
-    def PositiveLymph(self):
-        self.df["PositiveLymph"].fillna(np.mean(self.df["PositiveLymph"]), inplace=True)
+    def positiveLymph(self):
+        self.df["positiveLymph"].fillna(np.mean(self.df["positiveLymph"]), inplace=True)
 
-    def SurgeryDate(self):
-        self.df["SurgeryDate1"] = pd.to_datetime(self.df["SurgeryDate1"], errors='coerce')
-        self.df["SurgeryDate2"] = pd.to_datetime(self.df["SurgeryDate2"], errors='coerce')
-        self.df["SurgeryDate3"] = pd.to_datetime(self.df["SurgeryDate3"], errors='coerce')
+    def surgeryDate(self):
+        self.df["surgeryDate1"] = pd.to_datetime(self.df["surgeryDate1"], errors='coerce')
+        self.df["surgeryDate2"] = pd.to_datetime(self.df["surgeryDate2"], errors='coerce')
+        self.df["surgeryDate3"] = pd.to_datetime(self.df["surgeryDate3"], errors='coerce')
 
         # Create a column that indicates whether the patient has surgery
         self.df["hadSurgery"] = np.where(
-            self.df["SurgeryDate1"].isnull() & self.df["SurgeryDate2"].isnull() & self.df["SurgeryDate3"].isnull(), 0, 1)
-        self.df["lastSurgeryDate"] = self.df[["SurgeryDate1", "SurgeryDate2", "SurgeryDate2"]].max(axis=1)
+            self.df["surgeryDate1"].isnull() & self.df["surgeryDate2"].isnull() & self.df["surgeryDate3"].isnull(), 0, 1)
+        self.df["lastSurgeryDate"] = self.df[["surgeryDate1", "surgeryDate2", "surgeryDate2"]].max(axis=1)
         self.df.lastSurgeryDate.fillna(0, inplace=True)
 
-        self.df.drop(["SurgeryDate1", "SurgeryDate2", "SurgeryDate3"], inplace=True, axis=1)
+        self.df.drop(columns=["surgeryDate1", "surgeryDate2", "surgeryDate3"], inplace=True)
 
     def er(self):
         self.df["er_perc"] = self.df["er"].fillna(-1).astype(str).apply(self.get_percentage)
@@ -198,4 +195,64 @@ class preprocessor():
         self.df["er"] = np.where(self.df["er_perc"].isnull(), self.df["er_pos"], self.df["er_perc"])
         self.df["er"].fillna(1, inplace=True)
 
-        self.df.drop(["er_perc", "er_pos"], inplace=True, axis=1)
+        self.df.drop(columns=["er_perc", "er_pos"], inplace=True)
+
+    def her2(self):
+        her2value_dict = {'+3': 3, '+2': 2, '+1': 1, '+0': 0, '3+': 3, '2+': 2, '1+': 1, '0+': 0,
+                          '0': 0, '1': 1, '2': 2, '3': 3,
+                          'neg': 0, 'pos': 3, '-': 0, '+': 3, 'חיובי': 3, '?': 2, 'שלילי': 0,
+                          'indeterm': 2, 'intermediate': 2, 'equivocal': 2, 'indet': 2, 'borderline': 2, 'nrg': 0,
+                          'amplified': 3, 'akhah': 0, 'heg': 0, 'בינוני': 2, '_': 0, 'no': 0, 'nd': 0, 'akhkh': 0, 'nec': 0,
+                          'pending': 2, 'nag': 0, 'po': 3}
+
+        def get_her2(x):
+            if pd.isnull(x):
+                return 2
+            for value in her2value_dict:
+                if value in str(x).lower():
+                    return her2value_dict[value]
+            return 2
+
+        self.df['her2'] = self.df['her2'].apply(get_her2)
+
+    def get_sign(self, input):
+        x = re.search("[pPnN+-]", input)
+        if not x:
+            return np.nan
+        return input[x.start()]
+
+    def get_percentage(self, input):
+        ls = re.findall("[0-9]+%", input)
+        ls = [int(sub.replace('%', '')) for sub in ls]
+        return np.mean(ls)
+
+    def preprocess(self):
+        self.binarize_labels()
+        self.age()
+        self.basicStage()
+        self.histologicalDiagnosis()
+        self.lymphovascularInvasion()
+        self.lymphNodesMarkTNM()
+        self.stage()
+        self.surgerySum()
+        self.surgeryNames()
+        self.KI67_protein()
+        self.lymphaticPenetration()
+        self.mMetastasesMarkTNM()
+        self.marginType()
+        self.tumorMarkTNM()
+        self.tumorWidth()
+        self.tumorDepth()
+        self.pr()
+        self.histopatologicalDegree()
+        self.nodesExam()
+        self.positiveLymph()
+        self.surgeryDate()
+        self.er()
+
+
+if __name__ == '__main__':
+    pre = Preprocessor('../data/train_data.csv', '../data/train_labels.csv')
+    pre.preprocess()
+
+    print(1)
