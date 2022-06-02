@@ -311,6 +311,8 @@ class Preprocessor:
 if __name__ == '__main__':
     train_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv')
     train_preprocessor.preprocess()
+    df = train_preprocessor.get_df()
+    labels = train_preprocessor.get_labels()
 
     encoders = train_preprocessor.get_encoders()
     test_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv',
