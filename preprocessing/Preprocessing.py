@@ -7,15 +7,20 @@ from sklearn.preprocessing import MultiLabelBinarizer
 import re
 from datetime import datetime
 
+from utils import *
+
 class preprocessor():
-    def __init__(self, data_file_name: str, lables_file_name: str):
+    def __init__(self):#, data_file_name: str, lables_file_name: str):
         self.df = pd.read_csv(r"https://github.com/michahashkes/IMLHackathon/blob/main/data/train_data.csv?raw=true")
         self.labels = pd.read_csv(r"https://github.com/michahashkes/IMLHackathon/blob/main/data/train_labels.csv?raw=true")
 
+        self.df.rename(columns=new_columns, inplace=True)
+        self.labels.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
+
         self.labels['locationDistalMetastases'] = self.labels['locationDistalMetastases'].apply(ast.literal_eval)
-        mlb = MultiLabelBinarizer().fit(self.labels['locationDistalMetastases'])
-        self.lables_binary = mlb.transform(self.labels['locationDistalMetastases'])
-        self.lables_binary = pd.DataFrame(self.lables_binary, columns=mlb.classes_)
+        self.mlb = MultiLabelBinarizer().fit(self.labels['locationDistalMetastases'])
+        self.lables_binary = self.mlb.transform(self.labels['locationDistalMetastases'])
+        self.lables_binary = pd.DataFrame(self.lables_binary, columns=self.mlb.classes_)
         self.lables_binary["sum"] = self.lables_binary.sum(axis=1)
 
     def age(self):
@@ -35,7 +40,11 @@ class preprocessor():
         """
         make dummies
         """
-        self.df = pd.get_dummies(self.df, columns=['histologicalDiagnosis'])
+        self.histological_diagnosis_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(self.df[['histologicalDiagnosis']])
+        encoded_columns = pd.DataFrame(self.histological_diagnosis_enc.transform(self.df[['histologicalDiagnosis']]),
+                                       columns=self.histological_diagnosis_enc.get_feature_names_out(['histologicalDiagnosis']))
+        self.df = self.df.join(encoded_columns)
+        self.df = self.df.drop(columns="marginType")
 
     def lymphovascularInvasion(self):
         """
@@ -112,9 +121,11 @@ class preprocessor():
             lambda x: TNM_M_stages_dict[x] if x in TNM_M_stages_dict else 1)
 
     def marginType(self):
-
-        self.df = pd.get_dummies(self.df, columns=["marginType"])
-        self.df = self.df.drop("marginType_none", 1)
+        self.margin_type_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(self.df[['marginType']])
+        encoded_columns = pd.DataFrame(self.margin_type_enc.transform(self.df[['marginType']]),
+                                       columns=self.margin_type_enc.get_feature_names_out(['marginType']))
+        self.df = self.df.join(encoded_columns)
+        self.df = self.df.drop(columns="marginType")
 
     def tumorMarkTNM(self):
 
