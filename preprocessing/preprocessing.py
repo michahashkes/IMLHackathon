@@ -9,6 +9,7 @@ from datetime import datetime
 
 from utils import *
 
+
 class Preprocessor:
     def __init__(self, data_file_name: str, lables_file_name: str, mlb: MultiLabelBinarizer = None,
                  histological_diagnosis_enc: OneHotEncoder = None, margin_type_enc: OneHotEncoder = None):
@@ -145,6 +146,12 @@ class Preprocessor:
     def tumorWidth(self):
         self.df = self.df.drop(columns="tumorWidth")
 
+    def activityDate(self):
+        self.df = self.df.drop(columns="activityDate")
+
+    def actualActivity(self):
+        self.df = self.df.drop(columns="actualActivity")
+
     def pr(self):
 
         self.df["pr_perc"] = self.df["pr"].fillna(-1).astype(str).apply(self.get_percentage)
@@ -215,6 +222,9 @@ class Preprocessor:
 
         self.df['her2'] = self.df['her2'].apply(get_her2)
 
+    def side(self):
+        self.df['side'] = self.df['side'].replace({'שמאל': 0, 'ימין': 1})
+
     def get_sign(self, input):
         x = re.search("[pPnN+-]", input)
         if not x:
@@ -248,11 +258,29 @@ class Preprocessor:
         self.nodesExam()
         self.positiveLymph()
         self.surgeryDate()
+        self.her2()
+        self.side()
         self.er()
+
+    def get_encoders(self):
+        return self.mlb,  self.histological_diagnosis_enc, self.margin_type_enc
+
+    def get_features(self):
+        return self.df.columns
+
+    def get_df(self):
+        return self.df
+
+    def get_labels(self):
+        return self.lables_binary
 
 
 if __name__ == '__main__':
-    pre = Preprocessor('../data/train_data.csv', '../data/train_labels.csv')
-    pre.preprocess()
+    train_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv')
+    train_preprocessor.preprocess()
 
-    print(1)
+    encoders = train_preprocessor.get_encoders()
+    test_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv',
+                                     encoders[0], encoders[1], encoders[2])
+    test_preprocessor.preprocess()
+
