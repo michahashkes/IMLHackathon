@@ -46,7 +46,8 @@ new_columns = {'Form Name': 'formName_{suffix}',
 class Preprocessor:
     def __init__(self, data_file_name: str, labels0_file_name: str, labels1_file_name: str,
                  mlb: MultiLabelBinarizer = None,
-                 histological_diagnosis_enc: OneHotEncoder = None, margin_type_enc: OneHotEncoder = None):
+                 histological_diagnosis_enc: OneHotEncoder = None, margin_type_enc: OneHotEncoder = None,
+                 surgery_name_enc: MultiLabelBinarizer = None):
         self.df = pd.read_csv(data_file_name)
         self.labels0 = pd.read_csv(labels0_file_name)
         self.labels1 = pd.read_csv(labels1_file_name)
@@ -54,7 +55,8 @@ class Preprocessor:
         self.df.rename(columns=new_columns, inplace=True)
         self.labels0.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
 
-        self.mlb, self.histological_diagnosis_enc, self.margin_type_enc = mlb, histological_diagnosis_enc, margin_type_enc
+        self.mlb, self.histological_diagnosis_enc, self.margin_type_enc, self.surgery_name_enc =\
+            mlb, histological_diagnosis_enc, margin_type_enc, surgery_name_enc
 
     def binarize_labels(self):
         self.labels0['locationDistalMetastases'] = self.labels0['locationDistalMetastases'].apply(ast.literal_eval)
@@ -63,7 +65,7 @@ class Preprocessor:
             self.mlb.fit(self.labels0['locationDistalMetastases'])
         self.lables_binary = self.mlb.transform(self.labels0['locationDistalMetastases'])
         self.lables_binary = pd.DataFrame(self.lables_binary, columns=self.mlb.classes_)
-        self.lables_binary["sum"] = self.lables_binary.sum(axis=1)
+        # self.lables_binary["sum"] = self.lables_binary.sum(axis=1)
 
     def age(self):
         """
@@ -129,9 +131,21 @@ class Preprocessor:
         """
         get all surgeries' names, make them dummies, and delete all 3 cols of surgery names (1,2 and 3)
         """
-        temp = self.df[["surgeryName1", "surgeryName2", "surgeryName3"]].stack().str.get_dummies().sum(level=0)
-        self.df = self.df.join(temp)
-        self.df[temp.columns] = self.df[temp.columns].fillna(0)
+        # surgery1 = self.df["surgeryName1"].fillna('')
+        # surgery2 = self.df["surgeryName2"].fillna('')
+        # surgery3 = self.df["surgeryName3"].fillna('')
+        # surgery = surgery1
+        combined = pd.Series(self.df[["surgeryName1", "surgeryName2", "surgeryName3"]].values.tolist())
+        combined = combined.apply(lambda l: [x for x in l if not pd.isnull(x)])
+        if self.surgery_name_enc is None:
+            self.surgery_name_enc = MultiLabelBinarizer()
+            self.surgery_name_enc.fit(combined)
+        combined = self.surgery_name_enc.transform(combined)
+        combined = pd.DataFrame(combined, columns=self.surgery_name_enc.classes_)
+
+        # temp = self.df[["surgeryName1", "surgeryName2", "surgeryName3"]].stack()#.str#.get_dummies().sum(level=0)
+        self.df = self.df.join(combined)
+        # self.df[temp.columns] = self.df[temp.columns].fillna(0)
 
         self.df = self.df.drop(columns=["surgeryName1", "surgeryName2", "surgeryName3"])
 
@@ -301,7 +315,7 @@ class Preprocessor:
         self.er()
 
     def get_encoders(self):
-        return self.mlb,  self.histological_diagnosis_enc, self.margin_type_enc
+        return self.mlb,  self.histological_diagnosis_enc, self.margin_type_enc, self.surgery_name_enc
 
     def get_features(self):
         return self.df.columns
@@ -317,13 +331,17 @@ class Preprocessor:
 
 
 if __name__ == '__main__':
-    train_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv')
+    train_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv', '../data/train_labels1.csv')
     train_preprocessor.preprocess()
-    df = train_preprocessor.get_df()
-    labels = train_preprocessor.get_labels0()
+    train_df = train_preprocessor.get_df()
+    train_labels = train_preprocessor.get_labels0()
+    train_labels1 = train_preprocessor.get_labels1()
 
     encoders = train_preprocessor.get_encoders()
-    test_preprocessor = Preprocessor('../data/train_data.csv', '../data/train_labels.csv',
-                                     encoders[0], encoders[1], encoders[2])
+    test_preprocessor = Preprocessor('../data/dev_data.csv', '../data/dev_labels.csv', '../data/dev_labels1.csv',
+                                     encoders[0], encoders[1], encoders[2], encoders[3])
     test_preprocessor.preprocess()
+    test_df = test_preprocessor.get_df()
+    test_labels = test_preprocessor.get_labels0()
+    test_labels1 = test_preprocessor.get_labels1()
 
