@@ -49,6 +49,9 @@ class Preprocessor:
                  histological_diagnosis_enc: OneHotEncoder = None, margin_type_enc: OneHotEncoder = None,
                  surgery_name_enc: MultiLabelBinarizer = None):
         self.df = pd.read_csv(data_file_name)
+        self.labels0 = pd.read_csv(labels0_file_name)
+        self.labels0.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
+        self.labels1 = pd.read_csv(labels1_file_name)
 
         self.df.rename(columns=new_columns, inplace=True)
 
@@ -56,30 +59,29 @@ class Preprocessor:
             mlb, form_names_enc, histological_diagnosis_enc, margin_type_enc, surgery_name_enc
         self.train = train
 
-        if self.train:
-            self.labels0 = pd.read_csv(labels0_file_name)
-            self.labels0.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
-            self.labels1 = pd.read_csv(labels1_file_name)
-            X_y = self.df.join(self.labels0)
-            X_y = X_y.join(self.labels1)
-            forms_df = X_y[['id', 'formName']]
-            self.form_names_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(forms_df[['formName']])
-            encoded_columns = pd.DataFrame(self.form_names_enc.transform(forms_df[['formName']]),
-                                           columns=self.form_names_enc.categories_)
-            forms_df = forms_df.join(encoded_columns).drop(columns='formName')
-            forms_df = forms_df.groupby('id').max().reset_index()
-            X_y = X_y.merge(forms_df, on='id')
-            X_y = X_y.drop(columns=['userName', 'formName']).drop_duplicates().reset_index(drop=True)
-            self.df = X_y.drop(columns=['locationDistalMetastases', 'אבחנה-Tumor size'])
-            self.labels0 = X_y[['locationDistalMetastases']]
-            self.labels1 = X_y['אבחנה-Tumor size']
-
-        else:
-            forms_df = self.df[['id', 'formName']]
-            encoded_columns = pd.DataFrame(self.form_names_enc.transform(forms_df[['formName']]),
-                                           columns=self.form_names_enc.categories_)
-            self.df = self.df.join(encoded_columns).drop(columns=['userName', 'formName'])
-        # self.labels0.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
+        # if self.train:
+        #     self.labels0 = pd.read_csv(labels0_file_name)
+        #     self.labels0.rename(columns={'אבחנה-Location of distal metastases': 'locationDistalMetastases'}, inplace=True)
+        #     self.labels1 = pd.read_csv(labels1_file_name)
+        #     X_y = self.df.join(self.labels0)
+        #     X_y = X_y.join(self.labels1)
+        #     forms_df = X_y[['id', 'formName']]
+        #     self.form_names_enc = OneHotEncoder(sparse=False, handle_unknown='ignore').fit(forms_df[['formName']])
+        #     encoded_columns = pd.DataFrame(self.form_names_enc.transform(forms_df[['formName']]),
+        #                                    columns=self.form_names_enc.categories_)
+        #     forms_df = forms_df.join(encoded_columns).drop(columns='formName')
+        #     forms_df = forms_df.groupby('id').max().reset_index()
+        #     X_y = X_y.merge(forms_df, on='id')
+        #     X_y = X_y.drop(columns=['userName', 'formName']).drop_duplicates().reset_index(drop=True)
+        #     self.df = X_y.drop(columns=['locationDistalMetastases', 'אבחנה-Tumor size'])
+        #     self.labels0 = X_y[['locationDistalMetastases']]
+        #     self.labels1 = X_y['אבחנה-Tumor size']
+        #
+        # else:
+        #     forms_df = self.df[['id', 'formName']]
+        #     encoded_columns = pd.DataFrame(self.form_names_enc.transform(forms_df[['formName']]),
+        #                                    columns=self.form_names_enc.categories_)
+        #     self.df = self.df.join(encoded_columns).drop(columns=['userName', 'formName'])
 
     def fix_data(self, train=True):
         X_y = self.df.join(self.labels0)
@@ -343,8 +345,8 @@ class Preprocessor:
         return np.mean(ls)
 
     def preprocess(self):
-        if self.train:
-            self.binarize_labels()
+        # if self.train:
+        self.binarize_labels()
         self.age()
         self.basicStage()
         self.histologicalDiagnosis()

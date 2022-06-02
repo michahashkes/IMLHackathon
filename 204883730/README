@@ -1,10 +1,13 @@
 Files:
 
+To use, run python code like this:
+python3 classifier.py <train.feats> <train.labels.0> <train.labels.1> <test.feats>
+
 USERS - our cs usernames
 README
-project.pdf - a discription of our workflow
+project.pdf - a description of our workflow
 task2/predictions.csv
 task2/requirements.txt
 task2/classifier.py
-task2/preprocessor.py - the preprossesing class
+task2/preprocessor.py - the preprocessing class
 
