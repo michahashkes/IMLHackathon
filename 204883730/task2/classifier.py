@@ -53,13 +53,17 @@ def predict_metastasis_location(train_df, train_labels, test_df):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 5:
-        raise(f"USAGE: {sys.argv[0]} <train.feats> <train.labels.0> <train.labels.1> <test.feats>")
-    train_feats = sys.argv[1]
-    train_labels_zero = sys.argv[2]
-    train_labels_one = sys.argv[3]
-    test_feats = sys.argv[4]
+    # if len(sys.argv) != 5:
+    #     raise(f"USAGE: {sys.argv[0]} <train.feats> <train.labels.0> <train.labels.1> <test.feats>")
+    # train_feats = sys.argv[1]
+    # train_labels_zero = sys.argv[2]
+    # train_labels_one = sys.argv[3]
+    # test_feats = sys.argv[4]
 
+    train_feats = 'train.feats.csv'
+    train_labels_zero = 'train.labels.0.csv'
+    train_labels_one = 'train.labels.1.csv'
+    test_feats = 'test.feats.csv'
     train_df, train_labels0, train_labels1, test_df = data_load(train_feats, train_labels_zero, train_labels_one, test_feats)
 
     # task 1
