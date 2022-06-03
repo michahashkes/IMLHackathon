@@ -60,10 +60,15 @@ if __name__ == '__main__':
     # train_labels_one = sys.argv[3]
     # test_feats = sys.argv[4]
 
-    train_feats = 'train.feats.csv'
-    train_labels_zero = 'train.labels.0.csv'
-    train_labels_one = 'train.labels.1.csv'
-    test_feats = 'test.feats.csv'
+    # train_feats = 'train.feats.csv'
+    # train_labels_zero = 'train.labels.0.csv'
+    # train_labels_one = 'train.labels.1.csv'
+    # test_feats = 'test.feats.csv'
+    train_feats = r"https://github.com/michahashkes/IMLHackathon/blob/main/data/train.feats.csv?raw=true"
+    train_labels_zero = r"https://github.com/michahashkes/IMLHackathon/blob/main/data/train.labels.0.csv?raw=true"
+    train_labels_one = r"https://github.com/michahashkes/IMLHackathon/blob/main/data/train.labels.1.csv?raw=true"
+    test_feats = r"https://github.com/michahashkes/IMLHackathon/blob/main/data/test.feats.csv?raw=true"
+
     train_df, train_labels0, train_labels1, test_df = data_load(train_feats, train_labels_zero, train_labels_one, test_feats)
 
     # task 1
